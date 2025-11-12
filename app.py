@@ -5,30 +5,55 @@ import pandas as pd
 from flask_cors import CORS
 from datetime import datetime
 import warnings
+import os
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Global variables for model artifacts
+model = None
+scaler = None
+feature_columns = None
+
 # Load the model, scaler, and feature columns
-print("Loading model artifacts...")
-try:
-    with open('best_model.pkl', 'rb') as f:
-        model = pickle.load(f)
-    print("✓ Model loaded successfully")
+def load_model_artifacts():
+    """Load model artifacts with error handling"""
+    global model, scaler, feature_columns
     
-    with open('scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    print("✓ Scaler loaded successfully")
-    
-    with open('feature_columns.pkl', 'rb') as f:
-        feature_columns = pickle.load(f)
-    print("✓ Feature columns loaded successfully")
-    print(f"  Total features: {len(feature_columns)}")
-    
-except Exception as e:
-    print(f"ERROR loading model artifacts: {str(e)}")
-    raise
+    print("Loading model artifacts...")
+    try:
+        # Check if files exist
+        required_files = ['best_model.pkl', 'scaler.pkl', 'feature_columns.pkl']
+        missing_files = [f for f in required_files if not os.path.exists(f)]
+        
+        if missing_files:
+            raise FileNotFoundError(f"Missing required files: {missing_files}")
+        
+        with open('best_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+        print("✓ Model loaded successfully")
+        
+        with open('scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+        print("✓ Scaler loaded successfully")
+        
+        with open('feature_columns.pkl', 'rb') as f:
+            feature_columns = pickle.load(f)
+        print("✓ Feature columns loaded successfully")
+        print(f"  Total features: {len(feature_columns)}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"ERROR loading model artifacts: {str(e)}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Files in directory: {os.listdir('.')}")
+        return False
+
+# Load artifacts on startup
+if not load_model_artifacts():
+    print("WARNING: Model artifacts failed to load. API will return errors.")
 
 def engineer_features(df_input):
     """
@@ -59,7 +84,7 @@ def engineer_features(df_input):
     # Sensor ID encoding (simple numeric encoding for single prediction)
     if 'Sensor_ID' in df.columns:
         # Simple hash encoding for sensor ID
-        df['Sensor_ID_encoded'] = df['Sensor_ID'].apply(lambda x: hash(x) % 1000)
+        df['Sensor_ID_encoded'] = df['Sensor_ID'].apply(lambda x: hash(str(x)) % 1000)
     else:
         df['Sensor_ID_encoded'] = 0
     
@@ -90,10 +115,12 @@ def engineer_features(df_input):
 
 @app.route('/', methods=['GET'])
 def home():
+    """API information endpoint"""
     return jsonify({
         'message': 'Water Leakage Detection API is running',
         'version': '1.0',
-        'model_type': type(model).__name__,
+        'model_type': type(model).__name__ if model else 'Not loaded',
+        'status': 'ready' if all([model, scaler, feature_columns]) else 'model not loaded',
         'endpoints': {
             '/': 'GET - API information',
             '/health': 'GET - Health check',
@@ -115,16 +142,25 @@ def home():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
+    is_healthy = all([model is not None, scaler is not None, feature_columns is not None])
+    
     return jsonify({
-        'status': 'healthy',
+        'status': 'healthy' if is_healthy else 'unhealthy',
         'model_loaded': model is not None,
         'scaler_loaded': scaler is not None,
-        'feature_count': len(feature_columns)
-    }), 200
+        'feature_columns_loaded': feature_columns is not None,
+        'feature_count': len(feature_columns) if feature_columns else 0,
+        'timestamp': datetime.now().isoformat()
+    }), 200 if is_healthy else 503
 
 @app.route('/features', methods=['GET'])
 def get_features():
     """Return the list of features used by the model"""
+    if not feature_columns:
+        return jsonify({
+            'error': 'Feature columns not loaded'
+        }), 500
+    
     return jsonify({
         'feature_count': len(feature_columns),
         'features': feature_columns,
@@ -153,6 +189,13 @@ def predict():
         "Sensor_ID": "SENSOR_001"  // Optional
     }
     """
+    # Check if model is loaded
+    if not all([model, scaler, feature_columns]):
+        return jsonify({
+            'error': 'Model artifacts not loaded. Please contact administrator.',
+            'status': 'service_unavailable'
+        }), 503
+    
     try:
         # Get JSON data from request
         data = request.get_json()
@@ -248,12 +291,19 @@ def predict_batch():
         ]
     }
     """
+    # Check if model is loaded
+    if not all([model, scaler, feature_columns]):
+        return jsonify({
+            'error': 'Model artifacts not loaded. Please contact administrator.',
+            'status': 'service_unavailable'
+        }), 503
+    
     try:
         # Get JSON data from request
         data = request.get_json()
         
         if not data or 'readings' not in data:
-            return jsonify({'error': 'No readings provided. Expected format: {"readings": [...]}''}), 400
+            return jsonify({'error': 'No readings provided. Expected format: {"readings": [...]}'}), 400
         
         readings = data['readings']
         
@@ -348,5 +398,6 @@ def predict_batch():
         }), 500
 
 if __name__ == '__main__':
-    # Run on port 10000 (Render's default)
-    app.run(host='0.0.0.0', port=10000, debug=False)
+    # Get port from environment variable or use default
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
