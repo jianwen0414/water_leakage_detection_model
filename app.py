@@ -9,6 +9,10 @@ import numpy as np
 import pandas as pd
 import os
 import logging
+import warnings
+
+# Suppress sklearn version warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,8 +29,20 @@ def load_model_files():
     global model, scaler
     
     try:
+        # Log versions
+        import sklearn
+        logger.info(f"Python packages:")
+        logger.info(f"  - numpy: {np.__version__}")
+        logger.info(f"  - pandas: {pd.__version__}")
+        logger.info(f"  - scikit-learn: {sklearn.__version__}")
+        logger.info(f"  - joblib: {joblib.__version__}")
+        
         model_path = 'water_leak_model.pkl'
         scaler_path = 'scaler.pkl'
+        
+        # Log current directory contents
+        logger.info(f"Current directory: {os.getcwd()}")
+        logger.info(f"Files in directory: {os.listdir('.')}")
         
         # Check if files exist
         if not os.path.exists(model_path):
@@ -37,7 +53,10 @@ def load_model_files():
             return False
             
         # Load model and scaler
+        logger.info(f"Loading model from {model_path}...")
         model = joblib.load(model_path)
+        
+        logger.info(f"Loading scaler from {scaler_path}...")
         scaler = joblib.load(scaler_path)
         
         logger.info("✓ Model and scaler loaded successfully")
@@ -46,8 +65,16 @@ def load_model_files():
         
         return True
         
+    except ImportError as e:
+        logger.error(f"Import error loading model files: {str(e)}")
+        logger.error("This usually indicates a numpy version mismatch")
+        logger.error("Please ensure requirements.txt specifies: numpy>=2.0.0")
+        return False
     except Exception as e:
         logger.error(f"Error loading model files: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 # Load model on startup
@@ -425,12 +452,29 @@ def predict():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
+    import sklearn
+    
     model_loaded = model is not None and scaler is not None
+    
+    # Get package versions
+    versions = {
+        'numpy': np.__version__,
+        'pandas': pd.__version__,
+        'scikit-learn': sklearn.__version__,
+        'joblib': joblib.__version__
+    }
+    
+    # List .pkl files
+    pkl_files = [f for f in os.listdir('.') if f.endswith('.pkl')]
+    
     return jsonify({
         'status': 'healthy' if model_loaded else 'unhealthy',
         'model_loaded': model_loaded,
         'model_type': type(model).__name__ if model else None,
-        'scaler_type': type(scaler).__name__ if scaler else None
+        'scaler_type': type(scaler).__name__ if scaler else None,
+        'versions': versions,
+        'pkl_files': pkl_files,
+        'working_directory': os.getcwd()
     }), 200
 
 @app.route('/model-info', methods=['GET'])
