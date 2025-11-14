@@ -1,16 +1,10 @@
 services:
   - type: web
-    name: water-leakage-detection-api
+    name: water-leakage-detector
     env: python
-    region: singapore  # Optional: choose closest region
-    plan: free  # or starter, standard, etc.
-    buildCommand: |
-      python --version
-      pip install --upgrade pip
-      pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 --worker-class sync app:app
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: PIP_NO_CACHE_DIR
-        value: "1"
+        value: 3.9.0
+    healthCheckPath: /health
