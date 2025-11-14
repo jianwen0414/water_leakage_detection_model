@@ -25,7 +25,7 @@ def load_model_files():
     global model, scaler
     
     try:
-        model_path = 'best_model.pkl'
+        model_path = 'water_leak_model.pkl'
         scaler_path = 'scaler.pkl'
         
         # Check if files exist
