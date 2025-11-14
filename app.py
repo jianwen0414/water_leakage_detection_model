@@ -266,7 +266,7 @@ HTML_TEMPLATE = """
                     resultDiv.className = 'result leak';
                     resultDiv.innerHTML = `
                         <div class="result-title">⚠️ LEAK DETECTED</div>
-                        <div class="probability">${(result.probability * 100).toFixed(1)}% Confidence</div>
+                        <div class="probability">${(result.confidence * 100).toFixed(1)}% Confidence</div>
                         <div class="result-details">
                             <strong>Recommendation:</strong> Immediate inspection required.<br>
                             <strong>Status:</strong> Abnormal system behavior detected.<br>
@@ -277,7 +277,7 @@ HTML_TEMPLATE = """
                     resultDiv.className = 'result no-leak';
                     resultDiv.innerHTML = `
                         <div class="result-title">✅ SYSTEM NORMAL</div>
-                        <div class="probability">${((1 - result.probability) * 100).toFixed(1)}% Confidence</div>
+                        <div class="probability">${(result.confidence * 100).toFixed(1)}% Confidence</div>
                         <div class="result-details">
                             <strong>Status:</strong> All parameters within normal range.<br>
                             <strong>Action:</strong> Continue regular monitoring.
