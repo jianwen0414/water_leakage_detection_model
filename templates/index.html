@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Water Leakage Detection</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <h1>Water Leakage Detection</h1>
+    <form id="input-form">
+        <label for="flow_rate">Flow Rate (L/min):</label>
+        <input type="number" id="flow_rate" name="flow_rate" step="0.01">
+        <label for="pressure">Pressure (bar):</label>
+        <input type="number" id="pressure" name="pressure" step="0.01">
+        <label for="temperature">Temperature (°C):</label>
+        <input type="number" id="temperature" name="temperature" step="0.01">
+        <button type="button" onclick="predict()">Predict</button>
+    </form>
+    <div id="result"></div>
+    <script>
+        async function predict() {
+            const flowRate = document.getElementById('flow_rate').value;
+            const pressure = document.getElementById('pressure').value;
+            const temperature = document.getElementById('temperature').value;
+
+            // Validate inputs
+            if (!flowRate || !pressure || !temperature) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        flow_rate: parseFloat(flowRate),
+                        pressure: parseFloat(pressure),
+                        temperature: parseFloat(temperature)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // Handle error response
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: red;">
+                            <h3>❌ Error</h3>
+                            <p>${data.error || 'Unknown error'}</p>
+                            <p>${data.message || ''}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Display results
+                const confidence = data.confidence ? data.confidence.toFixed(2) : 'N/A';
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>${data.status}</h3>
+                    <p><strong>${confidence}% Confidence</strong></p>
+                    <p><strong>Status:</strong> ${data.leak_detected ? 'Leak Detected' : 'All parameters within normal range.'}</p>
+                    <p><strong>Action:</strong> ${data.action}</p>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `
+                    <div style="color: red;">
+                        <h3>❌ Network Error</h3>
+                        <p>Failed to connect to the server. Please try again.</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
